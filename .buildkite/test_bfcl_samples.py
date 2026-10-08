@@ -103,7 +103,9 @@ RELEVANCE_FAILURE = {
 class BfclSamplesTest(unittest.TestCase):
     def test_ast_failure_to_sample(self):
         sample = run_bfcl.bfcl_failure_to_sample(AST_FAILURE)
-        self.assertEqual(sample["doc_id"], "simple_python_13")
+        self.assertIsInstance(sample["doc_id"], int)
+        self.assertEqual(sample["doc_id"], run_bfcl._numeric_doc_id("simple_python_13"))
+        self.assertEqual(sample["doc"]["answer"], "simple_python_13")
         self.assertIn("y=x^2", sample["doc"]["question"])
         self.assertEqual(sample["doc"]["functions"], ["calculate_area_under_curve"])
         self.assertEqual(sample["exact_match"], 0.0)

@@ -29,6 +29,7 @@ import json
 import os
 import sys
 import time
+import zlib
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -519,6 +520,20 @@ def _sort_case_id(case_id: str) -> tuple[str, int]:
     return case_id, 0
 
 
+def _numeric_doc_id(case_id: str) -> int:
+    """Stable positive int for eval dashboard ingest (expects bigint doc_id)."""
+    return zlib.crc32(case_id.encode("utf-8")) & 0x7FFFFFFF
+
+
+def _sample_doc(question: str, functions: list[str], case_id: str) -> dict:
+    """doc payload; answer holds BFCL case id for traceability in warehouse JSON."""
+    return {
+        "question": question,
+        "answer": case_id,
+        "functions": functions,
+    }
+
+
 def _model_response_text(model_output: object) -> str:
     if model_output is None:
         return ""
@@ -584,9 +599,10 @@ def bfcl_failure_to_sample(record: dict) -> dict:
     target = json.dumps(record.get("possible_answer"), ensure_ascii=False)
     model_out = _model_output_from_record(record)
     filtered = _failure_filtered_text(record)
+    case_id = record["id"]
     return {
-        "doc_id": record["id"],
-        "doc": {"question": question, "functions": functions},
+        "doc_id": _numeric_doc_id(case_id),
+        "doc": _sample_doc(question, functions, case_id),
         "target": target,
         "resps": [[_model_response_text(model_out)]],
         "filtered_resps": [filtered] if filtered else [],
@@ -598,11 +614,12 @@ def bfcl_failure_to_sample(record: dict) -> dict:
 
 def bfcl_success_to_sample(entry: dict, result_row: dict) -> dict:
     """Map a dataset entry + generate result row to an lm_eval-style sample line."""
+    case_id = entry["id"]
     question = _user_question_text(entry.get("question", ""))
     functions = _function_names(entry)
     return {
-        "doc_id": entry["id"],
-        "doc": {"question": question, "functions": functions},
+        "doc_id": _numeric_doc_id(case_id),
+        "doc": _sample_doc(question, functions, case_id),
         "target": _ground_truth_text(entry),
         "resps": [[_model_response_text(result_row.get("result"))]],
         "filtered_resps": ["1"],
